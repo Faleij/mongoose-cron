@@ -100,13 +100,26 @@ model.create({
 });
 ```
 
-By setting the `cron.interval` field we define a recurring job.
+By setting the `cron.interval` field we define a recurring job. Without `cron.timezone`, the schedule is interpreted in the **server's local timezone**. Set `cron.timezone` to an IANA timezone name (e.g. `'America/New_York'`) to interpret the interval in that zone (e.g. `'0 0 3 * * *'` = 3:00 AM in that timezone).
 
 ```js
 model.create({
   cron: {
     ...
     interval: '* * * * * *' // every second
+  }
+});
+```
+
+Example: daily at 3:00 AM in a specific timezone:
+
+```js
+model.create({
+  cron: {
+    enabled: true,
+    startAt: new Date(),
+    interval: '0 0 3 * * *',
+    timezone: 'America/New_York'
   }
 });
 ```

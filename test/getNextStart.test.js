@@ -55,12 +55,12 @@ describe('getNextStart', () => {
       assert.strictEqual(result.getTime(), futureStart.getTime());
     });
 
-    it('returns existing startAt when startAt is exactly at future boundary (nextDelay=0)', () => {
+    it('returns existing startAt when startAt is at or after future boundary (nextDelay=0)', () => {
       const cron = createCron();
-      const now = new Date();
-      const d = doc({ cron: { interval: '0 0 3 * * *', startAt: now } });
+      const justAfterNow = moment().add(100, 'ms').toDate();
+      const d = doc({ cron: { interval: '0 0 3 * * *', startAt: justAfterNow } });
       const result = cron.getNextStart(d);
-      assert.strictEqual(result.getTime(), now.getTime());
+      assert.strictEqual(result.getTime(), justAfterNow.getTime());
     });
 
     it('when nextDelay is set, returns startAt only if startAt >= now + nextDelay', () => {
@@ -73,37 +73,37 @@ describe('getNextStart', () => {
   });
 
   describe('daily at 3:00 AM (0 0 3 * * *)', () => {
-    it('returns next 3:00 AM UTC as a Date', () => {
+    it('returns next 3:00 AM (server local) as a Date', () => {
       const cron = createCron();
       const pastStart = moment().subtract(1, 'day').toDate();
       const d = doc({ cron: { interval: '0 0 3 * * *', startAt: pastStart } });
       const result = cron.getNextStart(d);
       assert.ok(result instanceof Date);
-      assert.strictEqual(moment.utc(result).hours(), 3, 'later uses UTC');
-      assert.strictEqual(moment.utc(result).minutes(), 0);
-      assert.strictEqual(moment.utc(result).seconds(), 0);
+      assert.strictEqual(moment(result).hours(), 3, 'next run at 3:00 server local');
+      assert.strictEqual(moment(result).minutes(), 0);
+      assert.strictEqual(moment(result).seconds(), 0);
     });
 
-    it('returns next occurrence (today or tomorrow UTC) not the one after', () => {
+    it('returns next occurrence (today or tomorrow local) not the one after', () => {
       const cron = createCron();
       const pastStart = moment().subtract(2, 'days').toDate();
       const d = doc({ cron: { interval: '0 0 3 * * *', startAt: pastStart } });
       const result = cron.getNextStart(d);
-      const nowUtc = moment.utc();
-      const hourUtc = nowUtc.hours();
-      const expectedNext = hourUtc < 3
-        ? moment.utc(nowUtc).hours(3).minutes(0).seconds(0).milliseconds(0)
-        : moment.utc(nowUtc).add(1, 'day').hours(3).minutes(0).seconds(0).milliseconds(0);
+      const now = moment();
+      const hour = now.hours();
+      const expectedNext = hour < 3
+        ? moment(now).hours(3).minutes(0).seconds(0).milliseconds(0)
+        : moment(now).add(1, 'day').hours(3).minutes(0).seconds(0).milliseconds(0);
       assert.strictEqual(
         result.getTime(),
         expectedNext.valueOf(),
-        'next run should be the immediate next 3:00 AM UTC, not the one after'
+        'next run should be the immediate next 3:00 AM local, not the one after'
       );
     });
   });
 
   describe('hourly schedule', () => {
-    it('returns next full hour (UTC) when schedule is every hour at minute 0', () => {
+    it('returns next full hour (server local) when schedule is every hour at minute 0', () => {
       const cron = createCron();
       const d = doc({
         cron: {
@@ -113,13 +113,13 @@ describe('getNextStart', () => {
       });
       const result = cron.getNextStart(d);
       assert.ok(result instanceof Date);
-      assert.strictEqual(moment.utc(result).minutes(), 0);
-      assert.strictEqual(moment.utc(result).seconds(), 0);
-      const nowUtc = moment.utc();
-      const expectedNext = moment.utc(nowUtc).add(1, 'hour').minutes(0).seconds(0).milliseconds(0);
+      assert.strictEqual(moment(result).minutes(), 0);
+      assert.strictEqual(moment(result).seconds(), 0);
+      const now = moment();
+      const expectedNext = moment(now).add(1, 'hour').minutes(0).seconds(0).milliseconds(0);
       assert.ok(
         Math.abs(result.getTime() - expectedNext.valueOf()) < 2000,
-        'next run should be the next full hour UTC (within 2s)'
+        'next run should be the next full hour local (within 2s)'
       );
     });
   });
@@ -164,8 +164,8 @@ describe('getNextStart', () => {
       const result = cron.getNextStart(d);
       assert.ok(result instanceof Date);
       assert.ok(result.getTime() <= futureStop.getTime());
-      assert.strictEqual(moment.utc(result).hours(), 3);
-      assert.strictEqual(moment.utc(result).minutes(), 0);
+      assert.strictEqual(moment(result).hours(), 3);
+      assert.strictEqual(moment(result).minutes(), 0);
     });
   });
 
@@ -191,7 +191,7 @@ describe('getNextStart', () => {
   });
 
   describe('specific time schedules', () => {
-    it('every day at 12:30 UTC returns 12:30 UTC', () => {
+    it('every day at 12:30 (server local) returns 12:30 local', () => {
       const cron = createCron();
       const d = doc({
         cron: {
@@ -200,9 +200,9 @@ describe('getNextStart', () => {
         }
       });
       const result = cron.getNextStart(d);
-      assert.strictEqual(moment.utc(result).hours(), 12);
-      assert.strictEqual(moment.utc(result).minutes(), 30);
-      assert.strictEqual(moment.utc(result).seconds(), 0);
+      assert.strictEqual(moment(result).hours(), 12);
+      assert.strictEqual(moment(result).minutes(), 30);
+      assert.strictEqual(moment(result).seconds(), 0);
     });
 
     it('every minute returns a time within the next two minutes', () => {
@@ -218,6 +218,84 @@ describe('getNextStart', () => {
       const twoMinutes = 2 * 60 * 1000;
       assert.ok(result.getTime() >= now, 'next run should be in the future');
       assert.ok(result.getTime() <= now + twoMinutes, 'next run should be within 2 minutes');
+    });
+  });
+
+  describe('timezone (cron.timezone)', () => {
+    it('with timezone set, returns next run at that time in the given zone', () => {
+      const cron = createCron();
+      const pastStart = moment().subtract(1, 'day').toDate();
+      const d = doc({
+        cron: {
+          interval: '0 0 3 * * *',
+          startAt: pastStart,
+          timezone: 'America/New_York'
+        }
+      });
+      const result = cron.getNextStart(d);
+      assert.ok(result instanceof Date);
+      const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      const parts = formatter.formatToParts(result);
+      const hour = parseInt(parts.find(p => p.type === 'hour').value, 10);
+      const minute = parseInt(parts.find(p => p.type === 'minute').value, 10);
+      const second = parseInt(parts.find(p => p.type === 'second').value, 10);
+      assert.strictEqual(hour, 3, 'next run should be 03:00 in America/New_York');
+      assert.strictEqual(minute, 0);
+      assert.strictEqual(second, 0);
+    });
+
+    it('respects stopAt when timezone is set (past stopAt returns null)', () => {
+      const cron = createCron();
+      const pastStop = moment().subtract(1, 'day').toDate();
+      const d = doc({
+        cron: {
+          interval: '0 0 3 * * *',
+          startAt: moment().subtract(2, 'days').toDate(),
+          stopAt: pastStop,
+          timezone: 'Europe/London'
+        }
+      });
+      const result = cron.getNextStart(d);
+      assert.strictEqual(result, null);
+    });
+
+    it('respects stopAt when timezone is set (future stopAt returns next run before it)', () => {
+      const cron = createCron();
+      const futureStop = moment().add(7, 'days').toDate();
+      const d = doc({
+        cron: {
+          interval: '0 0 9 * * *',
+          startAt: moment().subtract(1, 'day').toDate(),
+          stopAt: futureStop,
+          timezone: 'Europe/London'
+        }
+      });
+      const result = cron.getNextStart(d);
+      assert.ok(result instanceof Date);
+      assert.ok(result.getTime() <= futureStop.getTime());
+    });
+
+    it('empty string timezone is treated as no timezone (server local)', () => {
+      const cron = createCron();
+      const pastStart = moment().subtract(1, 'day').toDate();
+      const d = doc({ cron: { interval: '0 0 3 * * *', startAt: pastStart, timezone: '' } });
+      const result = cron.getNextStart(d);
+      assert.ok(result instanceof Date);
+      assert.strictEqual(moment(result).hours(), 3);
+      assert.strictEqual(moment(result).minutes(), 0);
+    });
+
+    it('invalid timezone returns null', () => {
+      const cron = createCron();
+      const d = doc({
+        cron: {
+          interval: '0 0 3 * * *',
+          startAt: moment().subtract(1, 'day').toDate(),
+          timezone: 'Invalid/Timezone'
+        }
+      });
+      const result = cron.getNextStart(d);
+      assert.strictEqual(result, null);
     });
   });
 });

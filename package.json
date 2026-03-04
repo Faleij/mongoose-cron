@@ -1,15 +1,15 @@
 {
   "name": "mongoose-cron",
-  "version": "0.5.8",
+  "version": "0.6.0",
   "description": "MongoDB collection as crontab",
   "main": "index.js",
   "scripts": {
-    "example": "node --harmony --harmony-destructuring example/index.js",
-    "test": "node --test test/"
+    "example": "node example/index.js",
+    "test": "node --test test/getNextStart.test.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xpepermint/mongoose-cron.git"
+    "url": "git+https://github.com/faleij/mongoose-cron.git"
   },
   "keywords": [
     "mongoose",
@@ -26,16 +26,20 @@
     "repeated",
     "collection"
   ],
-  "author": "Xpepermint",
+  "author": "Faleij, Xpepermint",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/xpepermint/mongoose-cron/issues"
+    "url": "https://github.com/faleij/mongoose-cron/issues"
   },
-  "homepage": "https://github.com/xpepermint/mongoose-cron#readme",
-  "devDependencies": {},
-  "dependencies": {
-    "later": "1.2.0",
-    "moment": "2.15.1",
+  "homepage": "https://github.com/faleij/mongoose-cron#readme",
+  "devDependencies": {
+    "moment": "2.30.1",
     "mongoose": "4.6.1"
+  },
+  "dependencies": {
+    "cron-parser": "4.9.0"
+  },
+  "peerDependencies": {
+    "mongoose": ">=4.0.0"
   }
 }
